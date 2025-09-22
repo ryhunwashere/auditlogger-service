@@ -1,7 +1,5 @@
 package io.ryhunwashere.auditlogger;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
 import java.sql.Timestamp;
 import java.util.Map;
 import java.util.UUID;
