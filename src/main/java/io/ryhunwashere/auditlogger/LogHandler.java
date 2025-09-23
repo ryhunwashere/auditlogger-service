@@ -19,8 +19,8 @@ public class LogHandler implements HttpHandler {
 
     public LogHandler(LogBatcher batcher) {
         this.batcher = batcher;
-        mapper = new ObjectMapper();
-        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
+        this.mapper = new ObjectMapper();
+        this.mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
     }
 
     @Override
@@ -28,11 +28,10 @@ public class LogHandler implements HttpHandler {
         if (exchange.getRequestMethod().equals(Methods.POST)) {
             exchange.getRequestReceiver().receiveFullString((ex, json) -> {
                 try {
-                    if (json.trim().startsWith("[")) {  // If JSON have multiple objects
-                        List<LogData> logs = mapper.readValue(json, new TypeReference<>() {
-                        });
+                    if (json.trim().startsWith("[")) {	// If JSON have multiple objects
+                        List<LogData> logs = mapper.readValue(json, new TypeReference<>() {});
                         batcher.addLogs(logs);
-                    } else {                            // If there's only 1 object
+                    } else {	 						// If there's only 1 object
                         LogData log = mapper.readValue(json, LogData.class);
                         batcher.addLog(log);
                     }

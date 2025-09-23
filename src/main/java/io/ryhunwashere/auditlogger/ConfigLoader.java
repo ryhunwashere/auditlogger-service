@@ -9,6 +9,7 @@ import java.io.IOException;
 public class ConfigLoader {
     private final String secret;
     private final String issuer;
+    private final int batchSize;
 
     public ConfigLoader(String filePath) {
         ObjectMapper mapper = new ObjectMapper();
@@ -16,6 +17,7 @@ public class ConfigLoader {
             JsonNode jsonNode = mapper.readTree(new File(filePath));
             secret = jsonNode.get("secret").asText();
             issuer = jsonNode.get("issuer").asText();
+            batchSize = jsonNode.get("batchSize").asInt();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -28,4 +30,8 @@ public class ConfigLoader {
     public String getIssuer() {
         return issuer;
     }
+
+	public int getBatchSize() {
+		return batchSize;
+	}
 }

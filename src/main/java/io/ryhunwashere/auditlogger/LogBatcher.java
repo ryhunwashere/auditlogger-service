@@ -1,28 +1,53 @@
 package io.ryhunwashere.auditlogger;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class LogBatcher {
     private final BlockingQueue<LogData> queue = new LinkedBlockingQueue<>();
+    
     private final LogDao dao;
     private final ScheduledExecutorService scheduler;
     private final ExecutorService vt;
-
+    private final int batchSize;
     private AtomicInteger fallbackLogsCount;  // How many logs left in the local (SQLite) database
-
+    
+    private static final int MIN_BATCH_SIZE = 50;
+    private static final int MAX_BATCH_SIZE = 500;
     private static final long SHUTDOWN_TIMEOUT = 30L;
     private static final long FLUSH_INTERVAL = 5L;
     private static final long LOCAL_FLUSH_INTERVAL = 30L;
 
-    public LogBatcher(LogDao dao, ExecutorService vt) {
-        this.vt = vt;
-        this.dao = dao;
+    public LogBatcher(LogDao dao, ExecutorService virtualThread, @Nullable int batchSize) {
+    	this.dao = dao;
+        this.vt = virtualThread;
+        
+        if (batchSize == 0 || batchSize < MIN_BATCH_SIZE) {
+        	System.out.println("Batch size setting (" + batchSize + ") is too low!" +
+        			"/n Batch size is set to minimum size: " + MIN_BATCH_SIZE);
+        	this.batchSize = MIN_BATCH_SIZE;
+        	
+        } else if (batchSize > MAX_BATCH_SIZE) {
+        	System.out.println("Batch size setting (" + batchSize + ") is too high!" +
+        	        "/n Batch size is set to maximum size: " + MAX_BATCH_SIZE);
+        	this.batchSize = MAX_BATCH_SIZE;
+        	
+        } else {
+        	this.batchSize = batchSize;
+        	System.out.println("Batch size set to: " + this.batchSize);
+        }
+        
         scheduler = Executors.newSingleThreadScheduledExecutor();
 
         // Schedule flushing logs to main DB
@@ -74,25 +99,33 @@ public class LogBatcher {
 
     private void flushLogs() {
         vt.submit(() -> {
-            ArrayList<LogData> batch = new ArrayList<>(100);
+            ArrayList<LogData> batch = new ArrayList<>(batchSize);
             try {
                 // Block until at least 1 row arrives
                 LogData firstLog = queue.take();
                 batch.add(firstLog);
-
-                queue.drainTo(batch, 99);
-
+                
+                // Instantly grab whatever else is available
+                queue.drainTo(batch, batchSize - 1);
+                
+                // Try to grab more if batch is underfilled
+                while (batch.size() < batchSize) {
+                    LogData next = queue.poll(3, TimeUnit.SECONDS);
+                    if (next == null) break; // Timeout reached
+                    batch.add(next);
+                }
+                
                 System.out.println("Flushing " + batch.size() + " logs...");
                 dao.insertBatch(batch);
-
+                
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 e.printStackTrace();
 
             } catch (SQLException e) {
                 System.err.println("Flush to main DB failed!");
-                insertIntoLocal(batch);
                 e.printStackTrace();
+                insertIntoLocal(batch);
             }
         });
     }

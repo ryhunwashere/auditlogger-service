@@ -30,5 +30,4 @@ public record LogData(
         double y,
         double z,
         Source source
-) {
-}
+) {}

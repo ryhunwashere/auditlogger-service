@@ -17,15 +17,15 @@ public class Main {
     }
 
     private static void runServer(ExecutorService vtExecutor) {
+    	ConfigLoader config = new ConfigLoader("config.json");
+    	
         LogDao logDao = new LogDao();
-        LogBatcher logBatcher = new LogBatcher(logDao, vtExecutor);
+        LogBatcher logBatcher = new LogBatcher(logDao, vtExecutor, config.getBatchSize());
 
         logBatcher.initFallbackLogsCount();
 
         RoutingHandler routes = new RoutingHandler()
                 .post("/logs", new LogHandler(logBatcher));
-
-        ConfigLoader config = new ConfigLoader("config.json");
 
         String secret = config.getSecret();
         String issuer = config.getIssuer();
