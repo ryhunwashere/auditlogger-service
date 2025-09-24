@@ -1,8 +1,10 @@
-package io.ryhunwashere.auditlogger;
+package io.ryhunwashere.auditlogger.handler;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.ryhunwashere.auditlogger.process.LogBatcher;
+import io.ryhunwashere.auditlogger.process.LogData;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Methods;
@@ -28,15 +30,16 @@ public class LogHandler implements HttpHandler {
         if (exchange.getRequestMethod().equals(Methods.POST)) {
             exchange.getRequestReceiver().receiveFullString((ex, json) -> {
                 try {
-                    if (json.trim().startsWith("[")) {	// If JSON have multiple objects
-                        List<LogData> logs = mapper.readValue(json, new TypeReference<>() {});
+                    if (json.trim().startsWith("[")) {    // If JSON have multiple objects
+                        List<LogData> logs = mapper.readValue(json, new TypeReference<>() {
+                        });
                         batcher.addLogs(logs);
-                    } else {	 						// If there's only 1 object
+                    } else {                            // If there's only 1 object
                         LogData log = mapper.readValue(json, LogData.class);
                         batcher.addLog(log);
                     }
                     ex.setStatusCode(202);
-                    ex.getResponseSender().send("{\"status\":\"Accepted!!\"}");
+                    ex.getResponseSender().send("{\"status\":\"Accepted!\"}");
 
                 } catch (Exception e) {
                     ex.setStatusCode(400);

@@ -1,4 +1,4 @@
-package io.ryhunwashere.auditlogger;
+package io.ryhunwashere.auditlogger.process;
 
 import java.sql.Timestamp;
 import java.util.Map;
@@ -30,4 +30,5 @@ public record LogData(
         double y,
         double z,
         Source source
-) {}
+) {
+}

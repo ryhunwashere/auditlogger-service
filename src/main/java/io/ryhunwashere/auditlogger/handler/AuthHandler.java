@@ -1,4 +1,4 @@
-package io.ryhunwashere.auditlogger;
+package io.ryhunwashere.auditlogger.handler;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.JWTVerifier;

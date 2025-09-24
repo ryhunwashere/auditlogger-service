@@ -1,5 +1,5 @@
-config.json
-config.xml
+mc-server-keystore.jks
+config.properties
 
 target/
 !.mvn/wrapper/maven-wrapper.jar
