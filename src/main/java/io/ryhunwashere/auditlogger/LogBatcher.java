@@ -55,6 +55,14 @@ public class LogBatcher {
 
         // Schedule flushing logs from fallback DB if there's any
         scheduler.scheduleAtFixedRate(this::flushLocalLogs, LOCAL_FLUSH_INTERVAL, LOCAL_FLUSH_INTERVAL, TimeUnit.SECONDS);
+        
+        // Get and set count of fallback logs in the local SQLite database
+        try {
+            fallbackLogsCount = new AtomicInteger(dao.getLocalDBLogsCount());
+        } catch (SQLException e) {
+            e.printStackTrace();
+            fallbackLogsCount = new AtomicInteger();  // safe default
+        }
     }
 
     public void shutdownBatcher() {
@@ -82,19 +90,6 @@ public class LogBatcher {
 
     public void addLogs(List<LogData> logs) {
         queue.addAll(logs);
-    }
-
-    /**
-     * Get count of fallback logs in the local SQLite database and set it into fallbackLogsCount. <br>
-     * Ran once on server startup.
-     */
-    public void initFallbackLogsCount() {
-        try {
-            fallbackLogsCount = new AtomicInteger(dao.getLocalDBLogsCount());
-        } catch (SQLException e) {
-            e.printStackTrace();
-            fallbackLogsCount = new AtomicInteger();  // safe default
-        }
     }
 
     private void flushLogs() {

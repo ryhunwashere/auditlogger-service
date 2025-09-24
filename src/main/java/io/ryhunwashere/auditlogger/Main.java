@@ -22,8 +22,6 @@ public class Main {
         LogDao logDao = new LogDao();
         LogBatcher logBatcher = new LogBatcher(logDao, vtExecutor, config.getBatchSize());
 
-        logBatcher.initFallbackLogsCount();
-
         RoutingHandler routes = new RoutingHandler()
                 .post("/logs", new LogHandler(logBatcher));
 
