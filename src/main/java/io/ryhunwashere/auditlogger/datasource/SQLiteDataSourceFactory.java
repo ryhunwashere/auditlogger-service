@@ -11,8 +11,10 @@ public class SQLiteDataSourceFactory {
     public static DataSource getDataSource() {
         if (dataSource == null) {
             HikariConfig config = new HikariConfig();
-            config.setJdbcUrl("jdbc:sqlite:fallback.db");
+
+            config.setJdbcUrl("jdbc:sqlite:fallback.sqlite");
             config.setMaximumPoolSize(1);
+            config.setDriverClassName("org.sqlite.JDBC");
 
             dataSource = new HikariDataSource(config);
         }

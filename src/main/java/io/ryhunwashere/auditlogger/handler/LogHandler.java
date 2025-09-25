@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.ryhunwashere.auditlogger.process.LogBatcher;
-import io.ryhunwashere.auditlogger.process.LogData;
+import io.ryhunwashere.auditlogger.process.LogDTO;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Methods;
@@ -31,11 +31,11 @@ public class LogHandler implements HttpHandler {
             exchange.getRequestReceiver().receiveFullString((ex, json) -> {
                 try {
                     if (json.trim().startsWith("[")) {    // If JSON have multiple objects
-                        List<LogData> logs = mapper.readValue(json, new TypeReference<>() {
+                        List<LogDTO> logs = mapper.readValue(json, new TypeReference<>() {
                         });
                         batcher.addLogs(logs);
                     } else {                            // If there's only 1 object
-                        LogData log = mapper.readValue(json, LogData.class);
+                        LogDTO log = mapper.readValue(json, LogDTO.class);
                         batcher.addLog(log);
                     }
                     ex.setStatusCode(202);

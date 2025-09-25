@@ -9,9 +9,9 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class LogBatcher {
-    private final BlockingQueue<LogData> queue = new LinkedBlockingQueue<>();
+    private final BlockingQueue<LogDTO> queue = new LinkedBlockingQueue<>();
 
-    private final LogDao dao;
+    private final LogDAO dao;
     private final ScheduledExecutorService scheduler;
     private final ExecutorService vt;
     private final int batchSize;
@@ -23,7 +23,7 @@ public class LogBatcher {
     private static final long FLUSH_INTERVAL = 5L;
     private static final long LOCAL_FLUSH_INTERVAL = 30L;
 
-    public LogBatcher(LogDao dao, ExecutorService virtualThread, int batchSize) {
+    public LogBatcher(LogDAO dao, ExecutorService virtualThread, int batchSize) {
         this.dao = dao;
         this.vt = virtualThread;
 
@@ -80,20 +80,20 @@ public class LogBatcher {
             System.out.println("Shutdown successful!");
     }
 
-    public void addLog(LogData log) {
+    public void addLog(LogDTO log) {
         queue.add(log);
     }
 
-    public void addLogs(List<LogData> logs) {
+    public void addLogs(List<LogDTO> logs) {
         queue.addAll(logs);
     }
 
     private void flushLogs() {
         vt.submit(() -> {
-            ArrayList<LogData> batch = new ArrayList<>(batchSize);
+            ArrayList<LogDTO> batch = new ArrayList<>(batchSize);
             try {
                 // Block until at least 1 row arrives
-                LogData firstLog = queue.take();
+                LogDTO firstLog = queue.take();
                 batch.add(firstLog);
 
                 // Instantly grab whatever else is available
@@ -101,7 +101,7 @@ public class LogBatcher {
 
                 // Try to grab more if batch is underfilled
                 while (batch.size() < batchSize) {
-                    LogData next = queue.poll(3, TimeUnit.SECONDS);
+                    LogDTO next = queue.poll(3, TimeUnit.SECONDS);
                     if (next == null) break; // Timeout reached
                     batch.add(next);
                 }
@@ -121,7 +121,7 @@ public class LogBatcher {
         });
     }
 
-    private void insertIntoLocal(@NotNull ArrayList<LogData> batch) {
+    private void insertIntoLocal(@NotNull ArrayList<LogDTO> batch) {
         vt.submit(() -> {
             try {
                 int fallbackLogs = dao.insertBatchToLocalDB(batch);

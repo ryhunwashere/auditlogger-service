@@ -3,7 +3,7 @@ package io.ryhunwashere.auditlogger;
 import io.ryhunwashere.auditlogger.handler.AuthHandler;
 import io.ryhunwashere.auditlogger.handler.LogHandler;
 import io.ryhunwashere.auditlogger.process.LogBatcher;
-import io.ryhunwashere.auditlogger.process.LogDao;
+import io.ryhunwashere.auditlogger.process.LogDAO;
 import io.undertow.Undertow;
 import io.undertow.server.RoutingHandler;
 
@@ -23,13 +23,13 @@ public class Main {
 
     private static void runServer(ExecutorService vtExecutor) {
         PropsLoader.loadProperties("config.properties");
-        LogDao logDao = new LogDao();
-        
+        LogDAO logDao = new LogDAO();
+
         try {
-        	logDao.initDatabase();  	
+            logDao.initDatabase();
         } catch (SQLException e) {
-        	System.err.println("An error occured during database initialization.");
-        	e.printStackTrace();
+            System.err.println("An error occured during database initialization.");
+            e.printStackTrace();
         }
 
         String secret = PropsLoader.getString("auth.secret");

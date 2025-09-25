@@ -19,7 +19,7 @@ enum Source {
     PLAYER, CONSOLE, PLUGIN, SYSTEM, WORLD_EVENT
 }
 
-public record LogData(
+public record LogDTO(
         Timestamp timestamp,
         UUID playerUUID,
         String playerName,
