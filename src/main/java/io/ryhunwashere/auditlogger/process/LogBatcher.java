@@ -15,7 +15,7 @@ public class LogBatcher {
     private final ScheduledExecutorService scheduler;
     private final ExecutorService vt;
     private final int batchSize;
-    private AtomicInteger fallbackLogsCount;  // How many logs left in the local (SQLite) database
+    private AtomicInteger fallbackLogsCount;  // How many logs left in the local fallback database
 
     private static final int MIN_BATCH_SIZE = 50;
     private static final int MAX_BATCH_SIZE = 500;
@@ -124,11 +124,11 @@ public class LogBatcher {
     private void insertIntoLocal(@NotNull ArrayList<LogData> batch) {
         vt.submit(() -> {
             try {
-                dao.insertBatchToLocalDB(batch);
+                int fallbackLogs = dao.insertBatchToLocalDB(batch);
                 fallbackLogsCount.addAndGet(batch.size());
 
                 System.out.println("Inserting " + batch.size() + " logs into local DB." +
-                        "\n Total fallback: " + fallbackLogsCount.get() + " logs.");
+                        "\n Total fallback: " + fallbackLogs + " logs.");
 
             } catch (SQLException e) {
                 e.printStackTrace();

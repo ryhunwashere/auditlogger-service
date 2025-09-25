@@ -5,7 +5,7 @@ import com.zaxxer.hikari.HikariDataSource;
 
 import javax.sql.DataSource;
 
-public class LocalDataSourceFactory {
+public class SQLiteDataSourceFactory {
     private static HikariDataSource dataSource;
 
     public static DataSource getDataSource() {
