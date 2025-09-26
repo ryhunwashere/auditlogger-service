@@ -15,13 +15,13 @@ public class IdentifierValidator {
     );
     
     /** 
-     * Check if a string is valid to be used as a schema or table name based on any of these conditions:<br> 
+     * Check if a string is valid to be used as a schema or table name if all of these conditions are met:<br> 
      * 1. Starts with letter/underscore and followed by letters/digits/underscores.<br>
-     * 2. Contains generic reserved keywords commonly used in SQL (case-insensitive).<br>
-     * 3. String length is more than 30.
+     * 2. Doesn't contain generic reserved keywords commonly used in SQL (case-insensitive).<br>
+     * 3. Length is not longer than 30 characters.
      * 
      * @param str String to be checked
-     * @return True if none of the conditions are met (valid to be used), false otherwise (invalid).
+     * @return True if all conditions are met (valid to be used), false otherwise (invalid).
      * */
     public static boolean isValidIdentifier(String str) {
         // Length check (Oracle safe: <= 30)
