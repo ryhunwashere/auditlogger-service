@@ -23,15 +23,9 @@ public class Main {
     private static void runServer(ExecutorService vtExecutor) {
         PropsLoader.loadProperties("/config.properties");
 
-        LogDAO logDao;
-        try {
-            String mainTableName = PropsLoader.getString("db.mainTableName");
-            String fallbackTableName = PropsLoader.getString("db.fallbackTableName");
-            logDao = new LogDAO(mainTableName, fallbackTableName);
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw new RuntimeException("An error occurred during database initialization.");
-        }
+        String mainTableName = PropsLoader.getString("db.mainTableName");
+        String fallbackTableName = PropsLoader.getString("db.fallbackTableName");
+        LogDAO logDao = new LogDAO(mainTableName, fallbackTableName);
 
         String secret = PropsLoader.getString("auth.secret");
         String issuer = PropsLoader.getString("auth.issuer");
@@ -62,7 +56,7 @@ public class Main {
 
         System.out.println("Started on http://" + host + ":" + port + "/");
 
-        // !!! REMOVE THIS LINE BELOW ON PRODUCTION !!!
+        // TODO REMOVE THIS LINE BELOW ON PRODUCTION !!!
         System.out.println("Bearer: " + authHandler.getTestToken());
     }
 }

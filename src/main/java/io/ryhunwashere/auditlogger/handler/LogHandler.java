@@ -2,7 +2,10 @@ package io.ryhunwashere.auditlogger.handler;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.ryhunwashere.auditlogger.process.LogBatcher;
 import io.ryhunwashere.auditlogger.process.LogDTO;
 import io.undertow.server.HttpHandler;
@@ -21,8 +24,11 @@ public class LogHandler implements HttpHandler {
 
     public LogHandler(LogBatcher batcher) {
         this.batcher = batcher;
-        this.mapper = new ObjectMapper();
-        this.mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        this.mapper = JsonMapper.builder()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                .enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS)
+                .build()
+                .registerModule(new JavaTimeModule());
     }
 
     @Override
@@ -34,7 +40,7 @@ public class LogHandler implements HttpHandler {
                     .send("{\"status\":\"error\",\"message\":\"Content-Type must be application/json\"}");
             return;
         }
-        
+
         if (exchange.getRequestMethod().equals(Methods.POST)) {
             exchange.getRequestReceiver().receiveFullString((ex, json) -> {
                 try {
@@ -54,6 +60,7 @@ public class LogHandler implements HttpHandler {
                     ex.getResponseSender().send("{\"status\":\"Accepted!\"}");
 
                 } catch (Exception e) {
+                    e.printStackTrace();
                     ex.setStatusCode(400);
                     ex.getResponseSender().send("{\"status\":\"error\",\"message\":\"Invalid JSON format!\"}");
                 }

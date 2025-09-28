@@ -1,7 +1,10 @@
 package io.ryhunwashere.auditlogger.process;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import org.jetbrains.annotations.NotNull;
 
 import java.time.Instant;
 import java.util.Map;
@@ -29,13 +32,14 @@ public class LogDTO {
     private Instant timestamp;
 
     // Player UUID with multiple accepted key names
-    @JsonAlias({"player_uuid", "uuid", "playerUuid"})
+    @JsonAlias({"player_uuid", "uuid", "playerUuid", "playerUUID"})
     private UUID playerUUID;
 
     // Player name with multiple accepted key names
     @JsonAlias({"player_name", "name"})
     private String playerName;
 
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
     @JsonAlias({"action_type"})
     private ActionType actionType;
 
@@ -54,48 +58,115 @@ public class LogDTO {
     @JsonAlias({"zPos", "z_pos", "zPosition", "z_position"})
     private double z;
 
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
     @JsonAlias({"source"})
     private Source source;
 
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private UUID logUUID;
 
-    public LogDTO() {}
+    public LogDTO() {
+    }
 
     public void generateLogUUID() {
         this.logUUID = UUID.randomUUID();
     }
 
-    public Instant getTimestamp() { return timestamp; }
-    public void setTimestamp(Instant timestamp) { this.timestamp = timestamp; }
+    public Instant getTimestamp() {
+        return timestamp;
+    }
 
-    public UUID getPlayerUUID() { return playerUUID; }
-    public void setPlayerUUID(UUID playerUUID) { this.playerUUID = playerUUID; }
+    public void setTimestamp(Instant timestamp) {
+        this.timestamp = timestamp;
+    }
 
-    public String getPlayerName() { return playerName; }
-    public void setPlayerName(String playerName) { this.playerName = playerName; }
+    public UUID getPlayerUUID() {
+        return playerUUID;
+    }
 
-    public ActionType getActionType() { return actionType; }
-    public void setActionType(ActionType actionType) { this.actionType = actionType; }
+    public void setPlayerUUID(UUID playerUUID) {
+        this.playerUUID = playerUUID;
+    }
 
-    public Map<String, Object> getActionDetail() { return actionDetail; }
-    public void setActionDetail(Map<String, Object> actionDetail) { this.actionDetail = actionDetail; }
+    public String getPlayerName() {
+        return playerName;
+    }
 
-    public String getWorld() { return world; }
-    public void setWorld(String world) { this.world = world; }
+    public void setPlayerName(String playerName) {
+        this.playerName = playerName;
+    }
 
-    public double getX() { return x; }
-    public void setX(double x) { this.x = x; }
+    public ActionType getActionType() {
+        return actionType;
+    }
 
-    public double getY() { return y; }
-    public void setY(double y) { this.y = y; }
+    public void setActionType(ActionType actionType) {
+        this.actionType = actionType;
+    }
 
-    public double getZ() { return z; }
-    public void setZ(double z) { this.z = z; }
+    @JsonSetter("actionType")
+    public void setActionType(@NotNull String actionType) {
+        this.actionType = ActionType.valueOf(actionType.toUpperCase());
+    }
 
-    public Source getSource() { return source; }
-    public void setSource(Source source) { this.source = source; }
+    public Map<String, Object> getActionDetail() {
+        return actionDetail;
+    }
 
-    public UUID getLogUUID() { return logUUID; }
-    public void setLogUUID(UUID logUUID) { this.logUUID = logUUID; }
+    public void setActionDetail(Map<String, Object> actionDetail) {
+        this.actionDetail = actionDetail;
+    }
+
+    public String getWorld() {
+        return world;
+    }
+
+    public void setWorld(String world) {
+        this.world = world;
+    }
+
+    public double getX() {
+        return x;
+    }
+
+    public void setX(double x) {
+        this.x = x;
+    }
+
+    public double getY() {
+        return y;
+    }
+
+    public void setY(double y) {
+        this.y = y;
+    }
+
+    public double getZ() {
+        return z;
+    }
+
+    public void setZ(double z) {
+        this.z = z;
+    }
+
+    public Source getSource() {
+        return source;
+    }
+
+    public void setSource(Source source) {
+        this.source = source;
+    }
+
+    @JsonSetter("source")
+    public void setSource(@NotNull String source) {
+        this.source = Source.valueOf(source.toUpperCase());
+    }
+
+    public UUID getLogUUID() {
+        return logUUID;
+    }
+
+    public void setLogUUID(UUID logUUID) {
+        this.logUUID = logUUID;
+    }
 }
