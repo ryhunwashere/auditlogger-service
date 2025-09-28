@@ -2,8 +2,9 @@ package io.ryhunwashere.auditlogger;
 
 import org.jetbrains.annotations.NotNull;
 
-import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Properties;
 
 public class PropsLoader {
@@ -11,8 +12,11 @@ public class PropsLoader {
 
     public static void loadProperties(String propertiesPath) {
         props = new Properties();
-        try {
-            props.load(new FileInputStream(propertiesPath));
+        try (InputStream input = PropsLoader.class.getResourceAsStream(propertiesPath)) {
+            if (input == null) {
+                throw new FileNotFoundException("Resource not found: " + propertiesPath);
+            }
+            props.load(input);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

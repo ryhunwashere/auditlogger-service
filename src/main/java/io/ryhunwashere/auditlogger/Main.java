@@ -7,7 +7,6 @@ import io.ryhunwashere.auditlogger.process.LogDAO;
 import io.undertow.Undertow;
 import io.undertow.server.RoutingHandler;
 
-import java.sql.SQLException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -22,14 +21,16 @@ public class Main {
     }
 
     private static void runServer(ExecutorService vtExecutor) {
-        PropsLoader.loadProperties("config.properties");
-        LogDAO logDao = new LogDAO();
+        PropsLoader.loadProperties("/config.properties");
 
+        LogDAO logDao;
         try {
-            logDao.initDatabase();
-        } catch (SQLException e) {
-            System.err.println("An error occured during database initialization.");
+            String mainTableName = PropsLoader.getString("db.mainTableName");
+            String fallbackTableName = PropsLoader.getString("db.fallbackTableName");
+            logDao = new LogDAO(mainTableName, fallbackTableName);
+        } catch (Exception e) {
             e.printStackTrace();
+            throw new RuntimeException("An error occurred during database initialization.");
         }
 
         String secret = PropsLoader.getString("auth.secret");

@@ -1,9 +1,11 @@
 db.batchSize=100
 db.tableName=player_audit
+db.fallbackTableName=fallback_logs
 auth.secret=VeryStrongSecret42069
 auth.issuer=someone-else
 server.port=8080
 server.host=0.0.0.0
+server.timezone=Asia/Jakarta
 dataSource.url=jdbc:postgresql://localhost:5432/mydatabase
 dataSource.user=someone
 dataSource.password=impenetrablepasswordtrustme

@@ -22,22 +22,34 @@ public class LogHandler implements HttpHandler {
     public LogHandler(LogBatcher batcher) {
         this.batcher = batcher;
         this.mapper = new ObjectMapper();
-        this.mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
+        this.mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 
     @Override
     public void handleRequest(@NotNull HttpServerExchange exchange) {
+        String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
+        if (contentType == null || !contentType.contains("application/json")) {
+            exchange.setStatusCode(415);
+            exchange.getResponseSender()
+                    .send("{\"status\":\"error\",\"message\":\"Content-Type must be application/json\"}");
+            return;
+        }
+        
         if (exchange.getRequestMethod().equals(Methods.POST)) {
             exchange.getRequestReceiver().receiveFullString((ex, json) -> {
                 try {
-                    if (json.trim().startsWith("[")) {    // If JSON have multiple objects
+                    if (json.trim().startsWith("[")) { // If JSON have multiple objects
                         List<LogDTO> logs = mapper.readValue(json, new TypeReference<>() {
                         });
+                        logs.forEach(LogDTO::generateLogUUID);
                         batcher.addLogs(logs);
-                    } else {                            // If there's only 1 object
+
+                    } else { // If there's only 1 object
                         LogDTO log = mapper.readValue(json, LogDTO.class);
+                        log.generateLogUUID();
                         batcher.addLog(log);
                     }
+
                     ex.setStatusCode(202);
                     ex.getResponseSender().send("{\"status\":\"Accepted!\"}");
 

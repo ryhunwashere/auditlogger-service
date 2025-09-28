@@ -20,7 +20,7 @@ public class LogBatcher {
     private static final int MIN_BATCH_SIZE = 50;
     private static final int MAX_BATCH_SIZE = 500;
     private static final long SHUTDOWN_TIMEOUT = 30L;
-    private static final long FLUSH_INTERVAL = 5L;
+    private static final long FLUSH_INTERVAL = 10L;
     private static final long LOCAL_FLUSH_INTERVAL = 30L;
 
     public LogBatcher(LogDAO dao, ExecutorService virtualThread, int batchSize) {
@@ -53,7 +53,7 @@ public class LogBatcher {
         // Get and set count of fallback logs in the local SQLite database
         try {
             fallbackLogsCount = new AtomicInteger(dao.getLocalDBLogsCount());
-            System.out.println("Fallback logs in local SQLite DB: " + fallbackLogsCount.get() + " rows");
+            System.out.println("Fallback logs in local SQLite DB: " + fallbackLogsCount.intValue() + " rows");
         } catch (SQLException e) {
             e.printStackTrace();
             System.err.println("Cannot fetch current fallback rows in local SQLite DB.");
@@ -90,7 +90,7 @@ public class LogBatcher {
 
     private void flushLogs() {
         vt.submit(() -> {
-            ArrayList<LogDTO> batch = new ArrayList<>(batchSize);
+            List<LogDTO> batch = new ArrayList<>();
             try {
                 // Block until at least 1 row arrives
                 LogDTO firstLog = queue.take();
@@ -107,7 +107,7 @@ public class LogBatcher {
                 }
 
                 System.out.println("Flushing " + batch.size() + " logs...");
-                dao.insertBatch(batch);
+                dao.insertToPostgres(batch);
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -121,14 +121,13 @@ public class LogBatcher {
         });
     }
 
-    private void insertIntoLocal(@NotNull ArrayList<LogDTO> batch) {
+    private void insertIntoLocal(@NotNull List<LogDTO> batch) {
         vt.submit(() -> {
             try {
-                int fallbackLogs = dao.insertBatchToLocalDB(batch);
-                fallbackLogsCount.addAndGet(batch.size());
-
-                System.out.println("Inserting " + batch.size() + " logs into local DB." +
-                        "\n Total fallback: " + fallbackLogs + " logs.");
+                int insertedFallbackLogs = dao.insertToSQLite(batch);
+                fallbackLogsCount.addAndGet(insertedFallbackLogs);
+                System.out.println("Inserted " + insertedFallbackLogs + " logs into local DB." +
+                        "\n Total fallback: " + fallbackLogsCount.intValue() + " logs.");
 
             } catch (SQLException e) {
                 e.printStackTrace();
@@ -137,15 +136,14 @@ public class LogBatcher {
     }
 
     private void flushLocalLogs() {
-        if (fallbackLogsCount.get() > 0) {
+        if (fallbackLogsCount.intValue() > 0) {
             vt.submit(() -> {
                 try {
                     int flushedLogs = dao.flushLocalToMainDB();
                     fallbackLogsCount.getAndAdd(-flushedLogs);
-                    if (fallbackLogsCount.get() < 0) fallbackLogsCount.set(0);
-
+                    if (fallbackLogsCount.intValue() < 0)
+                        fallbackLogsCount.set(0);
                     System.out.println("Flushed " + flushedLogs + " logs from local DB.");
-
                 } catch (SQLException e) {
                     e.printStackTrace();
                     System.err.println("Failed to flush local logs into main DB.");
