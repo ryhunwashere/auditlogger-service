@@ -149,7 +149,8 @@ public class LogDAO {
                     + "UNIQUE (log_uuid, ts)"
                     + ") "
                     + "PARTITION BY RANGE (ts)";
-        } else if (jdbcUrl.startsWith("jdbc:sqlite:")) {
+        }
+        if (jdbcUrl.startsWith("jdbc:sqlite:")) {
             return "CREATE TABLE IF NOT EXISTS " + sqliteTableName + " ("
                     + "id INTEGER PRIMARY KEY, "
                     + "ts TEXT NOT NULL, "
@@ -164,9 +165,8 @@ public class LogDAO {
                     + "source TEXT NOT NULL, "
                     + "log_uuid TEXT UNIQUE"
                     + ")";
-        } else {
-            throw new IllegalArgumentException("Unsupported DataSource type: " + dataSource.getClass().getName());
         }
+        throw new IllegalArgumentException("Unsupported DataSource type: " + dataSource.getClass().getName());
     }
 
     private void createPartitionIndexes(DataSource dataSource) {
@@ -324,8 +324,7 @@ public class LogDAO {
         return localRowsCount;
     }
 
-    public int flushLocalToMainDB() throws SQLException {
-        int flushedLogs = 0;
+    public void flushLocalToMainDB() throws SQLException {
         try (Connection sqliteConn = SQLiteDataSourceFactory.getDataSource().getConnection();
              Connection postgresConn = PGDataSourceFactory.getDataSource().getConnection()) {
             sqliteConn.setAutoCommit(false);
@@ -400,18 +399,17 @@ public class LogDAO {
 
                 // Insert from logDTOList into Postgres
                 try (PreparedStatement stmt = postgresConn.prepareStatement(sqlInsertIntoPostgres())) {
-                    int[] insertStatements = insertBatchToPostgres(stmt, logDTOList);
-                    flushedLogs = insertStatements.length;
+                    insertBatchToPostgres(stmt, logDTOList);
                 } catch (SQLException | JsonProcessingException e) {
                     e.printStackTrace();
                 }
                 postgresConn.commit();
+
             } catch (SQLException e) {
                 sqliteConn.rollback();
                 postgresConn.rollback();
                 e.printStackTrace();
             }
         }
-        return flushedLogs;
     }
 }
