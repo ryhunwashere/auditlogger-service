@@ -6,7 +6,7 @@ auth.issuer=someone-else
 server.port=8080
 server.host=0.0.0.0
 server.timezone=Asia/Jakarta
-dataSource.url=jdbc:postgresql://localhost:5432/mydatabase
+dataSource.url=jdbc:postgresql://localhost:5432/minecraft_server?currentSchema=audit
 dataSource.user=someone
 dataSource.password=impenetrablepasswordtrustme
 dataSource.maximumPoolSize=10

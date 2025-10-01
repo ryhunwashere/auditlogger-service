@@ -8,47 +8,35 @@ import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.server.RoutingHandler;
 import io.undertow.util.Headers;
+import org.jetbrains.annotations.NotNull;
 
-import java.util.Date;
-import java.util.UUID;
+import java.util.Set;
 
 public class AuthHandler implements HttpHandler {
     private final RoutingHandler routes;
     private final JWTVerifier verifier;
-    private final String testToken;
+    private final Set<String> publicPaths;
 
-    public String getTestToken() {
-        return testToken;
-    }
-
-    public AuthHandler(RoutingHandler routes, String secret, String issuer) {
+    public AuthHandler(RoutingHandler routes, String secret, String issuer, Set<String> publicPaths) {
         this.routes = routes;
-        try {
-            Algorithm algorithm = Algorithm.HMAC256(secret);
+        this.publicPaths = publicPaths;
 
-            // Build a verifier (for incoming requests)
-            this.verifier = JWT.require(algorithm)
-                    .withIssuer(issuer)
-                    .withClaim("role", "mc-server")
-                    .build();
-
-            // create a token for testing (copy to Postman)
-            Date expiry = new Date(System.currentTimeMillis() + 60 * 60 * 1000); // 1 hour
-            this.testToken = JWT.create()
-                    .withIssuer(issuer)
-                    .withIssuedAt(new Date())
-                    .withExpiresAt(expiry)
-                    .withClaim("role", "mc-server")
-                    .withJWTId(UUID.randomUUID().toString())
-                    .sign(algorithm);
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to initialize AuthHandler", e);
-        }
+        Algorithm algorithm = Algorithm.HMAC256(secret);
+        this.verifier = JWT.require(algorithm)
+                .withIssuer(issuer)
+                .withClaim("role", "mc-server")
+                .build();
     }
 
     @Override
-    public void handleRequest(HttpServerExchange exchange) throws Exception {
+    public void handleRequest(@NotNull HttpServerExchange exchange) throws Exception {
+        // Skip authentication for public endpoints
+        String path = exchange.getRequestPath();
+        if (publicPaths.contains(path)) {
+            routes.handleRequest(exchange);
+            return;
+        }
+
         String authHeader = exchange.getRequestHeaders().getFirst(Headers.AUTHORIZATION);
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             exchange.setStatusCode(401);
@@ -60,7 +48,6 @@ public class AuthHandler implements HttpHandler {
         try {
             verifier.verify(token);
             routes.handleRequest(exchange);     // If valid, forward to real routes
-
         } catch (JWTVerificationException e) {
             exchange.setStatusCode(401);
             exchange.getResponseSender().send("Invalid or expired token");

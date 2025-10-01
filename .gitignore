@@ -1,4 +1,7 @@
-mc-server-keystore.jks
+*.log
+*.sqlite
+*.jks
+dependency-reduced-pom.xml
 config.properties
 
 target/
