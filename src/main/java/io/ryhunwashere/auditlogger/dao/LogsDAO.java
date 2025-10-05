@@ -1,38 +1,49 @@
-package io.ryhunwashere.auditlogger.process;
+package io.ryhunwashere.auditlogger.dao;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.ryhunwashere.auditlogger.PropsLoader;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.ryhunwashere.auditlogger.datasource.PGDataSourceFactory;
 import io.ryhunwashere.auditlogger.datasource.SQLiteDataSourceFactory;
-import io.ryhunwashere.auditlogger.process.LogDTO.ActionType;
-import io.ryhunwashere.auditlogger.process.LogDTO.Source;
+import io.ryhunwashere.auditlogger.dto.LogDTO;
+import io.ryhunwashere.auditlogger.dto.LogDTO.ActionType;
+import io.ryhunwashere.auditlogger.dto.LogDTO.Source;
 import io.ryhunwashere.auditlogger.util.DateTimeUtil;
 import io.ryhunwashere.auditlogger.util.IdentifierValidator;
+import io.ryhunwashere.auditlogger.util.PropsLoader;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.postgresql.util.PGobject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.sql.DataSource;
 import java.sql.*;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
-public class LogDAO {
+public class LogsDAO {
+    private static final Logger log = LoggerFactory.getLogger(LogsDAO.class);
     private final String postgresTableName;
     private final String sqliteTableName;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper;
+    private final DataSource postgresDataSource;
 
     private final static int MAX_PLAYER_NAME_LENGTH = 15;
     private final static int CLEANUP_INTERVAL_DAYS = 3;
 
-    public LogDAO(String postgresTableName, String sqliteTableName) {
+    public LogsDAO(String postgresTableName, String sqliteTableName) {
+        this.mapper = JsonMapper.builder()
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .build()
+                .setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL)
+                .registerModule(new JavaTimeModule());
         this.postgresTableName = postgresTableName;
         this.sqliteTableName = sqliteTableName;
         verifyTableNames();
@@ -49,22 +60,27 @@ public class LogDAO {
             throw new RuntimeException("SQLite Driver not found!");
         }
 
+        this.postgresDataSource = PGDataSourceFactory.getDataSource(PropsLoader.getConfig("auditconfig"));
         try {
-            DataSource postgresDataSource = PGDataSourceFactory.getDataSource();
             createTable(postgresDataSource);
-            createPartitionTables(postgresDataSource);
-            createPartitionIndexes(postgresDataSource);
+            createMonthlyPartition();
         } catch (SQLException e) {
             System.err.println("An error occurred when connecting to PostgreSQL database.");
-            e.printStackTrace();
+            log.error(e.getMessage());
         }
 
         try {
             createTable(SQLiteDataSourceFactory.getDataSource());
         } catch (SQLException e) {
             System.err.println("An error occurred when connecting to SQLite database.");
-            e.printStackTrace();
+            log.error(e.getMessage());
         }
+    }
+
+    public void createMonthlyPartition() throws SQLException {
+        createPartitionTables(postgresDataSource);
+        createPartitionIndexes(postgresDataSource);
+
     }
 
     private void verifyTableNames() {
@@ -102,7 +118,7 @@ public class LogDAO {
         String jdbcUrl = ((com.zaxxer.hikari.HikariDataSource) dataSource).getJdbcUrl();
         if (!jdbcUrl.startsWith("jdbc:postgresql:")) return;
 
-        ZoneId timezone = ZoneId.of(PropsLoader.getString("server.timezone", "UTC"));
+        ZoneId timezone = ZoneId.of(PropsLoader.getConfig("auditconfig").getString("server.timezone", "UTC"));
         LocalDate today = LocalDate.now(timezone);
         LocalDate firstDayOfMonth = today.withDayOfMonth(1);
         LocalDate firstDayOfNextMonth = today.plusMonths(1).withDayOfMonth(1);
@@ -120,7 +136,6 @@ public class LogDAO {
                 "CREATE TABLE IF NOT EXISTS " + postgresTableName + "_" + partitionYear + "_" + nextMonthNum + " "
                         + "PARTITION OF " + postgresTableName + " "
                         + "FOR VALUES FROM ('" + firstDayOfNextMonth + "') TO ('" + firstDayOfNextTwoMonths + "')";
-
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmtCurrentMonthPartition = conn.prepareStatement(sqlCreatePartitionForCurrentMonth);
              PreparedStatement stmtNextMonthPartition = conn.prepareStatement(sqlCreatePartitionForNextMonth)) {
@@ -169,11 +184,11 @@ public class LogDAO {
         throw new IllegalArgumentException("Unsupported DataSource type: " + dataSource.getClass().getName());
     }
 
-    private void createPartitionIndexes(DataSource dataSource) {
+    private void createPartitionIndexes(DataSource dataSource) throws SQLException {
         String jdbcUrl = ((com.zaxxer.hikari.HikariDataSource) dataSource).getJdbcUrl();
         if (!jdbcUrl.startsWith("jdbc:postgresql:")) return;
 
-        ZoneId timezone = ZoneId.of(PropsLoader.getString("server.timezone", "UTC"));
+        ZoneId timezone = ZoneId.of(PropsLoader.getConfig("auditconfig").getString("server.timezone", "UTC"));
         LocalDate today = LocalDate.now(timezone);
 
         int currentMonthNum = today.getMonthValue();
@@ -188,45 +203,36 @@ public class LogDAO {
 
         try (Connection conn = dataSource.getConnection()) {
             for (String partition : partitions) {
-                // Index on player_uuid
-                try (PreparedStatement stmt = conn.prepareStatement(
-                        "CREATE INDEX IF NOT EXISTS idx_" + partition + "_player_uuid ON " + partition
-                                + "(player_uuid)"
-                )) {
+                String playerUuidIdx = "CREATE INDEX IF NOT EXISTS idx_" + partition + "_player_uuid " +
+                        "ON " + partition + "(player_uuid)";
+                try (PreparedStatement stmt = conn.prepareStatement(playerUuidIdx)) {
                     stmt.execute();
                 }
 
-                // Index on world, x, y, z
-                try (PreparedStatement stmt = conn.prepareStatement(
-                        "CREATE INDEX IF NOT EXISTS idx_" + partition + "_world_xyz ON " + partition
-                                + "(world, x, y, z)"
-                )) {
+                String locationIdx = "CREATE INDEX IF NOT EXISTS idx_" + partition + "_world_xyz " +
+                        "ON " + partition + "(world, x, y, z)";
+                try (PreparedStatement stmt = conn.prepareStatement(locationIdx)) {
                     stmt.execute();
                 }
 
-                // Index on action_type
-                try (PreparedStatement stmt = conn.prepareStatement(
-                        "CREATE INDEX IF NOT EXISTS idx_" + partition + "_action_type ON " + partition
-                                + "(action_type)"
-                )) {
+                String actionTypeIdx = "CREATE INDEX IF NOT EXISTS idx_" + partition + "_action_type " +
+                        "ON " + partition + "(action_type)";
+                try (PreparedStatement stmt = conn.prepareStatement(actionTypeIdx)) {
                     stmt.execute();
                 }
 
-                // GIN index on JSONB column action_detail
-                try (PreparedStatement stmt = conn.prepareStatement("CREATE INDEX IF NOT EXISTS idx_" + partition
-                        + "_action_detail_gin ON " + partition + " USING gin (action_detail)"
-                )) {
+                String actionDetailGinIdx = "CREATE INDEX IF NOT EXISTS idx_" + partition + "_action_detail_gin " +
+                        "ON " + partition + " USING gin (action_detail)";
+                try (PreparedStatement stmt = conn.prepareStatement(actionDetailGinIdx)) {
                     stmt.execute();
                 }
             }
-        } catch (SQLException e) {
-            throw new RuntimeException("Failed to create indexes on partitions", e);
         }
     }
 
     public int insertToPostgres(@NotNull List<LogDTO> batch) throws SQLException {
         int[] insertStatements = null;
-        try (Connection conn = PGDataSourceFactory.getDataSource().getConnection()) {
+        try (Connection conn = postgresDataSource.getConnection()) {
             conn.setAutoCommit(false);
             try (PreparedStatement stmt = conn.prepareStatement(sqlInsertIntoPostgres())) {
                 insertStatements = insertBatchToPostgres(stmt, batch);
@@ -246,13 +252,11 @@ public class LogDAO {
             stmt.setObject(2, log.getPlayerUUID());
             stmt.setString(3, log.getPlayerName());
             stmt.setString(4, log.getActionType().toString().toLowerCase());
-
             String json = mapper.writeValueAsString(log.getActionDetail());
             PGobject jsonObj = new PGobject();
             jsonObj.setType("jsonb");
             jsonObj.setValue(json);
             stmt.setObject(5, jsonObj);
-
             stmt.setString(6, log.getWorld());
             stmt.setDouble(7, log.getX());
             stmt.setDouble(8, log.getY());
@@ -270,7 +274,6 @@ public class LogDAO {
                 + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         int[] insertedRows;
-
         try (Connection conn = SQLiteDataSourceFactory.getDataSource().getConnection()) {
             conn.setAutoCommit(false);
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -292,14 +295,12 @@ public class LogDAO {
             stmt.setString(2, log.getPlayerUUID().toString());
             stmt.setString(3, log.getPlayerName());
             stmt.setString(4, log.getActionType().toString().toLowerCase());
-
             try {
                 String actionDetailJson = mapper.writeValueAsString(log.getActionDetail());
                 stmt.setString(5, actionDetailJson);
             } catch (JsonProcessingException e) {
                 System.err.println(e.getMessage());
             }
-
             stmt.setString(6, log.getWorld());
             stmt.setDouble(7, log.getX());
             stmt.setDouble(8, log.getY());
@@ -320,13 +321,12 @@ public class LogDAO {
             if (rs.next())
                 localRowsCount = rs.getInt("total");
         }
-
         return localRowsCount;
     }
 
     public void flushLocalToMainDB() throws SQLException {
         try (Connection sqliteConn = SQLiteDataSourceFactory.getDataSource().getConnection();
-             Connection postgresConn = PGDataSourceFactory.getDataSource().getConnection()) {
+             Connection postgresConn = postgresDataSource.getConnection()) {
             sqliteConn.setAutoCommit(false);
             postgresConn.setAutoCommit(false);
             try {
@@ -357,7 +357,6 @@ public class LogDAO {
                         + "world, x, y, z, source, log_uuid FROM " + sqliteTableName;
                 try (PreparedStatement stmt = sqliteConn.prepareStatement(sqlSelectAllLocalRows);
                      ResultSet localResultSet = stmt.executeQuery()) {
-                    ObjectMapper mapper = new ObjectMapper();
                     while (localResultSet.next()) {
                         Instant ts = DateTimeUtil.stringToInstant(
                                 localResultSet.getString("ts"));
@@ -411,5 +410,91 @@ public class LogDAO {
                 e.printStackTrace();
             }
         }
+    }
+
+    public List<LogDTO> getLogsOnCurrentLoc(String world, double radius, double x, double z,
+                                            Instant since, Instant until, int limit) throws SQLException {
+        String sql = "SELECT ts, player_name, action_type, action_detail, world, x, y, z " +
+                "FROM " + postgresTableName + " " +
+                "WHERE world = ? " +
+                "AND x BETWEEN (? - ?) AND (? + ?) " +
+                "AND z BETWEEN (? - ?) AND (? + ?) " +
+                "AND ts BETWEEN ? AND ? " +
+                "ORDER BY ts DESC, id ASC " +
+                "LIMIT ?";
+        try (Connection conn = postgresDataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, world);
+            stmt.setDouble(2, x);
+            stmt.setDouble(3, radius);
+            stmt.setDouble(4, x);
+            stmt.setDouble(5, radius);
+            stmt.setDouble(6, z);
+            stmt.setDouble(7, radius);
+            stmt.setDouble(8, z);
+            stmt.setDouble(9, radius);
+            stmt.setTimestamp(10, Timestamp.from(since));
+            stmt.setTimestamp(11, Timestamp.from(until));
+            stmt.setInt(12, limit);
+
+            try {
+                return getResultAsList(stmt);
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return null;
+            }
+        }
+    }
+
+    public List<LogDTO> getLogsOfPlayer(UUID playerUuid, Instant since, Instant until, int limit) throws SQLException {
+        String sql = "SELECT ts, player_name, action_type, action_detail, world, x, y, z " +
+                "FROM " + postgresTableName + " " +
+                "WHERE player_uuid = ? " +
+                "AND ts BETWEEN ? AND ? " +
+                "ORDER BY ts DESC, id ASC " +
+                "LIMIT ?";
+        try (Connection conn = PGDataSourceFactory.getDataSource(PropsLoader.getConfig("auditconfig")).getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setObject(1, playerUuid);
+            stmt.setTimestamp(2, Timestamp.from(since));
+            stmt.setTimestamp(3, Timestamp.from(until));
+            stmt.setInt(4, limit);
+
+            try {
+                return getResultAsList(stmt);
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return null;
+            }
+        }
+    }
+
+    private List<LogDTO> getResultAsList(PreparedStatement stmt) throws SQLException {
+        List<LogDTO> logDTOList = null;
+        try (ResultSet rs = stmt.executeQuery()) {
+            if (rs.next()) {
+                logDTOList = new LinkedList<>();
+                do {
+                    LogDTO log = new LogDTO();
+                    log.setTimestamp(rs.getTimestamp("ts").toInstant());
+                    log.setPlayerName(rs.getString("player_name"));
+                    log.setActionType(rs.getString("action_type"));
+                    try {
+                        String actionDetailString = rs.getString("action_detail");
+                        Map<String, Object> actionDetailMap = mapper.readValue(actionDetailString, new TypeReference<>() {
+                        });
+                        log.setActionDetail(actionDetailMap);
+                    } catch (JsonProcessingException e) {
+                        e.printStackTrace();
+                    }
+                    log.setWorld(rs.getString("world"));
+                    log.setX(rs.getDouble("x"));
+                    log.setY(rs.getDouble("y"));
+                    log.setZ(rs.getDouble("z"));
+                    logDTOList.add(log);
+                } while (rs.next());
+            }
+        }
+        return logDTOList;
     }
 }

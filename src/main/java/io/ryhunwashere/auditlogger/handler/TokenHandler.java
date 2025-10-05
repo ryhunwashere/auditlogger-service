@@ -5,7 +5,7 @@ import com.auth0.jwt.algorithms.Algorithm;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.ryhunwashere.auditlogger.PropsLoader;
+import io.ryhunwashere.auditlogger.util.PropsLoader;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
@@ -14,6 +14,7 @@ import io.undertow.util.Methods;
 import java.util.Date;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 
 public class TokenHandler implements HttpHandler {
     private final Algorithm algorithm;
@@ -21,17 +22,20 @@ public class TokenHandler implements HttpHandler {
     private final String serverIssuer;
     private final String serverSecret;
     private final ObjectMapper mapper;
+    private final ExecutorService vt;
 
-    public TokenHandler(String secret, String issuer) {
+    public TokenHandler(String secret, String issuer, ExecutorService vt) {
+        this.vt = vt;
         this.issuer = issuer;
         algorithm = Algorithm.HMAC256(secret);
-        serverIssuer = PropsLoader.getString("auth.issuer");
-        serverSecret = PropsLoader.getString("auth.secret");
+        serverIssuer = PropsLoader.getConfig("auditconfig").getString("auth.issuer");
+        serverSecret = PropsLoader.getConfig("auditconfig").getString("auth.secret");
         mapper = new ObjectMapper();
     }
 
     @Override
     public void handleRequest(HttpServerExchange exchange) {
+        // vt.submit(() -> {
         if (!exchange.getRequestMethod().equals(Methods.POST)) {
             exchange.setStatusCode(403);
             exchange.getResponseSender().send("{\"status\":\"error\",\"message\":\"Only POST methods allowed.\"}");
@@ -75,5 +79,6 @@ public class TokenHandler implements HttpHandler {
             ex.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json");
             ex.getResponseSender().send("{\"token\":\"" + token + "\"}");
         });
+        // });
     }
 }

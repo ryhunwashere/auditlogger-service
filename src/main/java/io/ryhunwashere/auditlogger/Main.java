@@ -1,13 +1,15 @@
 package io.ryhunwashere.auditlogger;
 
+import io.ryhunwashere.auditlogger.dao.LogsDAO;
 import io.ryhunwashere.auditlogger.handler.AuthHandler;
-import io.ryhunwashere.auditlogger.handler.LogHandler;
+import io.ryhunwashere.auditlogger.handler.LogsHandler;
 import io.ryhunwashere.auditlogger.handler.TokenHandler;
-import io.ryhunwashere.auditlogger.process.LogBatcher;
-import io.ryhunwashere.auditlogger.process.LogDAO;
+import io.ryhunwashere.auditlogger.process.LogsManager;
+import io.ryhunwashere.auditlogger.util.PropsLoader;
 import io.undertow.Undertow;
 import io.undertow.server.RoutingHandler;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -17,7 +19,7 @@ public class Main {
     private static final String DEFAULT_HOST = "0.0.0.0";
     private static Undertow server;
 
-    public static void main(String[] args) {
+    static void main() {
         startServer();
     }
 
@@ -32,33 +34,35 @@ public class Main {
     }
 
     private static void initServer(ExecutorService vtExecutor) {
-        PropsLoader.loadProperties("/config.properties");
+        PropsLoader.initialize(Map.of(
+                "auditconfig", "/auditconfig.properties"
+        ));
 
-        String secret = PropsLoader.getString("auth.secret");
-        String issuer = PropsLoader.getString("auth.issuer");
+        String secret = PropsLoader.getConfig("auditconfig").getString("auth.secret");
+        String issuer = PropsLoader.getConfig("auditconfig").getString("auth.issuer");
 
         if (secret == null)
             throw new IllegalStateException("Missing 'auth.secret' in config properties file.");
         if (issuer == null)
             throw new IllegalStateException("Missing 'auth.issuer' in config properties file.");
 
-        String mainTableName = PropsLoader.getString("db.mainTableName");
-        String fallbackTableName = PropsLoader.getString("db.fallbackTableName");
+        String mainTableName = PropsLoader.getConfig("auditconfig").getString("db.mainLogsTableName");
+        String fallbackTableName = PropsLoader.getConfig("auditconfig").getString("db.fallbackLogsTableName");
 
-        LogDAO logDao = new LogDAO(mainTableName, fallbackTableName);
-        int batchSize = PropsLoader.getInt("db.batchSize");
-
-        LogBatcher logBatcher = new LogBatcher(logDao, vtExecutor, batchSize);
+        LogsDAO logsDao = new LogsDAO(mainTableName, fallbackTableName);
+        int batchSize = PropsLoader.getConfig("auditconfig").getInt("db.logsBatchSize");
+        LogsManager logsManager = new LogsManager(logsDao, vtExecutor, batchSize);
+        LogsHandler logsHandler = new LogsHandler(logsManager, vtExecutor);
 
         RoutingHandler routes = new RoutingHandler()
-                .post("/logs", new LogHandler(logBatcher))
-                .post("/token", new TokenHandler(secret, issuer));
-
+                .get("/logs", logsHandler)
+                .post("/logs", logsHandler)
+                .post("/token", new TokenHandler(secret, issuer, vtExecutor));
         Set<String> publicRoutes = Set.of("/token");
         AuthHandler authHandler = new AuthHandler(routes, secret, issuer, publicRoutes);
 
-        int port = PropsLoader.getInt("server.port", DEFAULT_PORT);
-        String host = PropsLoader.getString("server.host", DEFAULT_HOST);
+        int port = PropsLoader.getConfig("auditconfig").getInt("server.port", DEFAULT_PORT);
+        String host = PropsLoader.getConfig("auditconfig").getString("server.host", DEFAULT_HOST);
 
         server = Undertow.builder()
                 .addHttpListener(port, host)

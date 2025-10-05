@@ -1,15 +1,11 @@
-package io.ryhunwashere.auditlogger.process;
+package io.ryhunwashere.auditlogger.dto;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
-import com.fasterxml.jackson.annotation.JsonFormat;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.*;
 import org.jetbrains.annotations.NotNull;
 
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
-
 
 public class LogDTO {
     public enum ActionType {
@@ -28,7 +24,8 @@ public class LogDTO {
     }
 
     // Instant timestamp with multiple accepted key names
-    @JsonAlias({"time", "datetime", "date_time", "dateTime", "instant", "instantTimestamp", "instant_timestamp"})
+    @JsonAlias({"ts", "time", "datetime", "date_time", "dateTime", "instant", "instantTimestamp", "instant_timestamp"})
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
     private Instant timestamp;
 
     // Player UUID with multiple accepted key names

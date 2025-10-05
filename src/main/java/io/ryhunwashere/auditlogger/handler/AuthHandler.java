@@ -15,11 +15,11 @@ import java.util.Set;
 public class AuthHandler implements HttpHandler {
     private final RoutingHandler routes;
     private final JWTVerifier verifier;
-    private final Set<String> publicPaths;
+    private final Set<String> publicRoutes;
 
-    public AuthHandler(RoutingHandler routes, String secret, String issuer, Set<String> publicPaths) {
+    public AuthHandler(RoutingHandler routes, String secret, String issuer, Set<String> publicRoutes) {
         this.routes = routes;
-        this.publicPaths = publicPaths;
+        this.publicRoutes = publicRoutes;
 
         Algorithm algorithm = Algorithm.HMAC256(secret);
         this.verifier = JWT.require(algorithm)
@@ -30,9 +30,8 @@ public class AuthHandler implements HttpHandler {
 
     @Override
     public void handleRequest(@NotNull HttpServerExchange exchange) throws Exception {
-        // Skip authentication for public endpoints
-        String path = exchange.getRequestPath();
-        if (publicPaths.contains(path)) {
+        String route = exchange.getRequestPath();
+        if (publicRoutes.contains(route)) {
             routes.handleRequest(exchange);
             return;
         }
@@ -47,7 +46,7 @@ public class AuthHandler implements HttpHandler {
         String token = authHeader.substring("Bearer ".length());
         try {
             verifier.verify(token);
-            routes.handleRequest(exchange);     // If valid, forward to real routes
+            routes.handleRequest(exchange);
         } catch (JWTVerificationException e) {
             exchange.setStatusCode(401);
             exchange.getResponseSender().send("Invalid or expired token");
