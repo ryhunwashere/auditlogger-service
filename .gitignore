@@ -2,7 +2,7 @@
 *.sqlite
 *.jks
 dependency-reduced-pom.xml
-config.properties
+auditconfig.properties
 
 target/
 !.mvn/wrapper/maven-wrapper.jar
