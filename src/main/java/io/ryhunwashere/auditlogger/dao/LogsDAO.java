@@ -44,10 +44,34 @@ public class LogsDAO {
                 .build()
                 .setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL)
                 .registerModule(new JavaTimeModule());
+        
+        setTableNames(postgresTableName, sqliteTableName);
+        verifyDrivers();
+
+        this.postgresDataSource = PGDataSourceFactory.getDataSource(PropsLoader.getConfig("auditconfig"));
+        DataSource sqliteDataSource = SQLiteDataSourceFactory.getDataSource();
+        initDatabaseConnections(this.postgresDataSource, sqliteDataSource);
+    }
+
+    private void setTableNames(String postgresTableName, String sqliteTableName) {
+        boolean postgresTableNameIsValid = IdentifierValidator.isValidIdentifier(postgresTableName);
+        boolean sqliteTableNameIsValid = IdentifierValidator.isValidIdentifier(sqliteTableName);
+
+        if (postgresTableName.isBlank())
+            throw new IllegalArgumentException("Postgres database table name can neither be empty nor only contain whitespaces.");
+        if (!postgresTableNameIsValid)
+            throw new IllegalArgumentException("'" + postgresTableName + "' is invalid PostgreSQL table name.");
+
+        if (sqliteTableName.isBlank())
+            throw new IllegalArgumentException("SQLite database table name can neither be empty nor only contain whitespaces.");
+        if (!sqliteTableNameIsValid)
+            throw new IllegalArgumentException("'" + sqliteTableName + "' is invalid SQLite table name.");
+
         this.postgresTableName = postgresTableName;
         this.sqliteTableName = sqliteTableName;
-        verifyTableNames();
+    }
 
+    private void verifyDrivers() {
         try {
             Class.forName("org.postgresql.Driver");
         } catch (ClassNotFoundException e) {
@@ -59,22 +83,6 @@ public class LogsDAO {
         } catch (ClassNotFoundException e) {
             throw new RuntimeException("SQLite Driver not found!");
         }
-
-        this.postgresDataSource = PGDataSourceFactory.getDataSource(PropsLoader.getConfig("auditconfig"));
-        try {
-            createTable(postgresDataSource);
-            createMonthlyPartition();
-        } catch (SQLException e) {
-            System.err.println("An error occurred when connecting to PostgreSQL database.");
-            log.error(e.getMessage());
-        }
-
-        try {
-            createTable(SQLiteDataSourceFactory.getDataSource());
-        } catch (SQLException e) {
-            System.err.println("An error occurred when connecting to SQLite database.");
-            log.error(e.getMessage());
-        }
     }
 
     public void createMonthlyPartition() throws SQLException {
@@ -83,19 +91,29 @@ public class LogsDAO {
 
     }
 
-    private void verifyTableNames() {
-        boolean postgresTableNameIsValid = IdentifierValidator.isValidIdentifier(postgresTableName);
-        boolean sqliteTableNameIsValid = IdentifierValidator.isValidIdentifier(sqliteTableName);
+    private void initDatabaseConnections(DataSource postgresDataSource, DataSource sqliteDataSource) {
+        String postgresJdbcUrl = ((com.zaxxer.hikari.HikariDataSource) postgresDataSource).getJdbcUrl();
+        String sqliteJdbcUrl = ((com.zaxxer.hikari.HikariDataSource) sqliteDataSource).getJdbcUrl();
 
-        if (postgresTableName.isBlank())
-            throw new IllegalArgumentException("Postgres database table name can neither be empty nor only contain whitespaces.");
-        if (!postgresTableNameIsValid)
-            throw new IllegalArgumentException("'" + postgresTableName + "' is invalid table name.");
+        if (!postgresJdbcUrl.startsWith("jdbc:postgresql:"))
+            throw new IllegalArgumentException("The provided Postgres data source must be for PostgreSQL database.");
+        if (!sqliteJdbcUrl.startsWith("jdbc:sqlite:"))
+            throw new IllegalArgumentException("The provided SQLite data source must be for SQLite database.");
+        
+        try {
+            createTable(postgresDataSource);
+            createMonthlyPartition();
+        } catch (SQLException e) {
+            log.error(e.getMessage());
+            throw new RuntimeException("An error occurred when connecting to PostgreSQL database. Check the logs for details.");
+        }
 
-        if (sqliteTableName.isBlank())
-            throw new IllegalArgumentException("SQLite database table name can neither be empty nor only contain whitespaces.");
-        if (!sqliteTableNameIsValid)
-            throw new IllegalArgumentException("'" + sqliteTableName + "' is invalid table name.");
+        try {
+            createTable(sqliteDataSource);
+        } catch (SQLException e) {
+            log.error(e.getMessage());
+            throw new RuntimeException("An error occurred when connecting to SQLite database. Check the logs for details.");
+        }
     }
 
     @Contract(pure = true)
@@ -116,7 +134,8 @@ public class LogsDAO {
 
     private void createPartitionTables(@NotNull DataSource dataSource) throws SQLException {
         String jdbcUrl = ((com.zaxxer.hikari.HikariDataSource) dataSource).getJdbcUrl();
-        if (!jdbcUrl.startsWith("jdbc:postgresql:")) return;
+        if (!jdbcUrl.startsWith("jdbc:postgresql:"))
+            throw new IllegalArgumentException("Table partitions can only be created for Postgres table.")
 
         ZoneId timezone = ZoneId.of(PropsLoader.getConfig("auditconfig").getString("server.timezone", "UTC"));
         LocalDate today = LocalDate.now(timezone);
