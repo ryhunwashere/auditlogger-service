@@ -33,8 +33,8 @@ public class LogsDAO {
     private String postgresTableName;
     private String sqliteTableName;
     private final ObjectMapper mapper;
-    private final DataSource postgresDataSource;
-    private final DataSource sqliteDataSource;
+    private DataSource postgresDataSource;
+    private DataSource sqliteDataSource;
 
     private final static int MAX_PLAYER_NAME_LENGTH = 15;
     private final static int CLEANUP_INTERVAL_DAYS = 3;
@@ -48,22 +48,22 @@ public class LogsDAO {
         
         setTableNames(postgresTableName, sqliteTableName);
         verifyDrivers();
-
-        this.postgresDataSource = PGDataSourceFactory.getDataSource(PropsLoader.getConfig("auditconfig"));
-        this.sqliteDataSource = SQLiteDataSourceFactory.getDataSource();
-        initDatabaseConnections(this.postgresDataSource, this.sqliteDataSource);
+        setAndInitDBConnections();
     }
 
     private void setTableNames(String postgresTableName, String sqliteTableName) {
-        boolean postgresTableNameIsValid = IdentifierValidator.isValidIdentifier(postgresTableName);
-        boolean sqliteTableNameIsValid = IdentifierValidator.isValidIdentifier(sqliteTableName);
+        this.postgresTableName = postgresTableName;
+        this.sqliteTableName = sqliteTableName;
 
-        if (postgresTableName.isBlank())
+        boolean postgresTableNameIsValid = IdentifierValidator.isValidIdentifier(this.postgresTableName);
+        boolean sqliteTableNameIsValid = IdentifierValidator.isValidIdentifier(this.sqliteTableName);
+
+        if (this.postgresTableName.isBlank())
             throw new IllegalArgumentException("Postgres database table name can neither be empty nor only contain whitespaces.");
         if (!postgresTableNameIsValid)
             throw new IllegalArgumentException("'" + postgresTableName + "' is invalid PostgreSQL table name.");
 
-        if (sqliteTableName.isBlank())
+        if (this.sqliteTableName.isBlank())
             throw new IllegalArgumentException("SQLite database table name can neither be empty nor only contain whitespaces.");
         if (!sqliteTableNameIsValid)
             throw new IllegalArgumentException("'" + sqliteTableName + "' is invalid SQLite table name.");
@@ -89,10 +89,12 @@ public class LogsDAO {
     public void createMonthlyPartition() throws SQLException {
         createPartitionTables(postgresDataSource);
         createPartitionIndexes(postgresDataSource);
-
     }
 
-    private void initDatabaseConnections(DataSource postgresDataSource, DataSource sqliteDataSource) {
+    private void setAndInitDBConnections() {
+        postgresDataSource = PGDataSourceFactory.getDataSource(PropsLoader.getConfig("auditconfig"));
+        sqliteDataSource = SQLiteDataSourceFactory.getDataSource();
+
         String postgresJdbcUrl = ((com.zaxxer.hikari.HikariDataSource) postgresDataSource).getJdbcUrl();
         String sqliteJdbcUrl = ((com.zaxxer.hikari.HikariDataSource) sqliteDataSource).getJdbcUrl();
 
