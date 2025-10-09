@@ -9,7 +9,7 @@ server.timezone=Asia/Jakarta
 dataSource.url=jdbc:postgresql://localhost:5432/minecraft_server?currentSchema=audit
 dataSource.user=someone
 dataSource.password=impenetrablepasswordtrustme
-dataSource.maximumPoolSize=10
-dataSource.minimumIdle=2
+dataSource.maximumPoolSize=3
+dataSource.minimumIdle=1
 dataSource.idleTimeoutSeconds=30
-dataSource.connectionTimeoutSeconds=20
+dataSource.connectionTimeoutSeconds=5
