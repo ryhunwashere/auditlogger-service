@@ -30,10 +30,11 @@ import java.util.*;
 
 public class LogsDAO {
     private static final Logger log = LoggerFactory.getLogger(LogsDAO.class);
-    private final String postgresTableName;
-    private final String sqliteTableName;
+    private String postgresTableName;
+    private String sqliteTableName;
     private final ObjectMapper mapper;
     private final DataSource postgresDataSource;
+    private final DataSource sqliteDataSource;
 
     private final static int MAX_PLAYER_NAME_LENGTH = 15;
     private final static int CLEANUP_INTERVAL_DAYS = 3;
@@ -49,8 +50,8 @@ public class LogsDAO {
         verifyDrivers();
 
         this.postgresDataSource = PGDataSourceFactory.getDataSource(PropsLoader.getConfig("auditconfig"));
-        DataSource sqliteDataSource = SQLiteDataSourceFactory.getDataSource();
-        initDatabaseConnections(this.postgresDataSource, sqliteDataSource);
+        this.sqliteDataSource = SQLiteDataSourceFactory.getDataSource();
+        initDatabaseConnections(this.postgresDataSource, this.sqliteDataSource);
     }
 
     private void setTableNames(String postgresTableName, String sqliteTableName) {
@@ -135,7 +136,7 @@ public class LogsDAO {
     private void createPartitionTables(@NotNull DataSource dataSource) throws SQLException {
         String jdbcUrl = ((com.zaxxer.hikari.HikariDataSource) dataSource).getJdbcUrl();
         if (!jdbcUrl.startsWith("jdbc:postgresql:"))
-            throw new IllegalArgumentException("Table partitions can only be created for Postgres table.")
+            throw new IllegalArgumentException("Table partitions can only be created for Postgres table.");
 
         ZoneId timezone = ZoneId.of(PropsLoader.getConfig("auditconfig").getString("server.timezone", "UTC"));
         LocalDate today = LocalDate.now(timezone);
@@ -259,6 +260,7 @@ public class LogsDAO {
             } catch (SQLException | JsonProcessingException e) {
                 conn.rollback();
                 e.printStackTrace();
+                log.error(e.getMessage());
             }
         }
         return insertStatements != null ? insertStatements.length : 0;
@@ -302,6 +304,7 @@ public class LogsDAO {
                 conn.rollback();
                 insertedRows = null;
                 e.printStackTrace();
+                log.error(e.getMessage());
             }
         }
 
