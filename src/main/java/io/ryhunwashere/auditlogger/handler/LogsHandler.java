@@ -43,22 +43,21 @@ public class LogsHandler implements HttpHandler {
 
     @Override
     public void handleRequest(@NotNull HttpServerExchange exchange) {
-//        vt.submit(() -> {
-        HttpString method = exchange.getRequestMethod();
-        if (method.equals(Methods.POST)) {
-            postLogs(exchange);
-        } else if (method.equals(Methods.GET)) {
-            getLogs(exchange);
-        } else {
-            exchange.setStatusCode(405);
-            exchange.getResponseSender()
-                    .send("{\"status\":\"error\",\"message\":\"Only GET & POST methods allowed!\"}");
-        }
-//        });
+        vt.submit(() -> {
+            HttpString method = exchange.getRequestMethod();
+            if (method.equals(Methods.POST)) {
+                postLogs(exchange);
+            } else if (method.equals(Methods.GET)) {
+                getLogs(exchange);
+            } else {
+                exchange.setStatusCode(405);
+                exchange.getResponseSender()
+                        .send("{\"status\":\"error\",\"message\":\"Only GET & POST methods allowed!\"}");
+            }
+        });
     }
 
     private void postLogs(@NotNull HttpServerExchange exchange) {
-//        vt.submit(() -> {
         String contentType = exchange.getRequestHeaders().getFirst(Headers.CONTENT_TYPE_STRING);
         if (contentType == null || !contentType.contains("application/json")) {
             exchange.setStatusCode(415);
@@ -86,11 +85,9 @@ public class LogsHandler implements HttpHandler {
                 ex.getResponseSender().send("{\"status\":\"error\",\"message\":\"Invalid JSON format!\"}");
             }
         });
-//        });
     }
 
     private void getLogs(@NotNull HttpServerExchange exchange) {
-//        vt.submit(() -> {
         Map<String, Deque<String>> params = exchange.getQueryParameters();
 
         String sinceStr = getParam(params, "since");
@@ -137,7 +134,6 @@ public class LogsHandler implements HttpHandler {
             List<LogDTO> logDTOList = batcher.getLogsOnCurrentLoc(world, radius, x, z, since, until, limit);
             sendJson(exchange, logDTOList);
         }
-//        });
     }
 
     private void sendJson(@NotNull HttpServerExchange exchange, List<LogDTO> logDTOList) {

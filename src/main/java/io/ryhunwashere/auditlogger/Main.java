@@ -7,6 +7,7 @@ import io.ryhunwashere.auditlogger.handler.TokenHandler;
 import io.ryhunwashere.auditlogger.process.LogsManager;
 import io.ryhunwashere.auditlogger.util.PropsLoader;
 import io.undertow.Undertow;
+import io.undertow.UndertowOptions;
 import io.undertow.server.RoutingHandler;
 
 import java.util.Map;
@@ -59,7 +60,7 @@ public class Main {
                 .post("/logs", logsHandler)
                 .post("/token", new TokenHandler(secret, issuer, vtExecutor));
         Set<String> publicRoutes = Set.of("/token");
-        AuthHandler authHandler = new AuthHandler(routes, secret, issuer, publicRoutes);
+        AuthHandler authHandler = new AuthHandler(routes, secret, issuer, publicRoutes, vtExecutor);
 
         int port = PropsLoader.getConfig("auditconfig").getInt("server.port", DEFAULT_PORT);
         String host = PropsLoader.getConfig("auditconfig").getString("server.host", DEFAULT_HOST);
@@ -67,6 +68,12 @@ public class Main {
         server = Undertow.builder()
                 .addHttpListener(port, host)
                 .setHandler(authHandler)
+                .setIoThreads(1)
+                .setWorkerThreads(8)
+                .setDirectBuffers(false)    // use heap buffers
+                .setServerOption(UndertowOptions.ENABLE_HTTP2, false)
+                .setServerOption(UndertowOptions.NO_REQUEST_TIMEOUT, 30_000)    // 30s timeout
+                .setServerOption(UndertowOptions.MAX_HEADER_SIZE, 8 * 1024)     // 8KB header limit
                 .build();
     }
 }
